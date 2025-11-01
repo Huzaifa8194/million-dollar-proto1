@@ -19,19 +19,33 @@ const BLOCK_SIZE = 10 // Each block represents 10x10 pixels
 export function PixelGrid() {
   const [pixels, setPixels] = useState<Record<string, Pixel>>(() => {
     const initial: Record<string, Pixel> = {}
-    // Generate random sold blocks for demo
-    const colors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8", "#F7DC6F", "#BB8FCE", "#85C1E2"]
+    // Generate random sold blocks for demo with realistic data
+    const colors = ["#FF6B6B", "#4ECDC4", "#45B7D1", "#FFA07A", "#98D8C8", "#F7DC6F", "#BB8FCE", "#85C1E2", "#E74C3C", "#3498DB"]
+    const companies = [
+      { name: "CryptoX", link: "https://cryptox.io" },
+      { name: "NFT Marketplace", link: "https://nftmarket.com" },
+      { name: "DeFi Protocol", link: "https://defi.finance" },
+      { name: "Blockchain Labs", link: "https://blocklabs.dev" },
+      { name: "Web3 Studio", link: "https://web3studio.io" },
+      { name: "Token Analytics", link: "https://tokendata.io" },
+      { name: "Crypto News", link: "https://cryptonews.com" },
+      { name: "MetaVerse Inc", link: "https://metaverse.world" },
+      { name: "Smart Contracts", link: "https://smartcontracts.dev" },
+      { name: "Digital Assets", link: "https://digitalassets.com" },
+    ]
     
     for (let i = 0; i < GRID_SIZE; i++) {
       for (let j = 0; j < GRID_SIZE; j++) {
         const id = `${i}-${j}`
         const isSold = Math.random() > 0.85 // 15% sold for demo
+        const companyData = companies[Math.floor(Math.random() * companies.length)]
         initial[id] = {
           id,
           x: i,
           y: j,
           state: isSold ? "taken" : "free",
-          company: isSold ? "Brand" : undefined,
+          company: isSold ? companyData.name : undefined,
+          link: isSold ? companyData.link : undefined,
           color: isSold ? colors[Math.floor(Math.random() * colors.length)] : undefined,
         }
       }
@@ -41,6 +55,7 @@ export function PixelGrid() {
 
   const [selectedPixel, setSelectedPixel] = useState<Pixel | null>(null)
   const [hoveredPixel, setHoveredPixel] = useState<string | null>(null)
+  const [tooltipData, setTooltipData] = useState<{ x: number; y: number; pixel: Pixel } | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const animationFrameRef = useRef<number>()
 
@@ -134,10 +149,22 @@ export function PixelGrid() {
       const x = Math.floor(((e.clientX - rect.left) * scaleX) / BLOCK_SIZE)
       const y = Math.floor(((e.clientY - rect.top) * scaleY) / BLOCK_SIZE)
       const pixelId = `${x}-${y}`
+      const pixel = pixels[pixelId]
       
-      if (pixelId !== hoveredPixel && pixels[pixelId]) {
+      if (pixelId !== hoveredPixel && pixel) {
         setHoveredPixel(pixelId)
         renderCanvas(pixelId)
+        
+        // Show tooltip for taken/reserved pixels
+        if (pixel.state !== "free") {
+          setTooltipData({
+            x: e.clientX,
+            y: e.clientY,
+            pixel: pixel
+          })
+        } else {
+          setTooltipData(null)
+        }
       }
     })
   }, [hoveredPixel, pixels, renderCanvas])
@@ -188,6 +215,7 @@ export function PixelGrid() {
           onMouseMove={handleMouseMove}
           onMouseLeave={() => {
             setHoveredPixel(null)
+            setTooltipData(null)
             renderCanvas()
             if (animationFrameRef.current) {
               cancelAnimationFrame(animationFrameRef.current)
@@ -195,6 +223,49 @@ export function PixelGrid() {
           }}
         />
       </div>
+
+      {/* Hover Tooltip */}
+      {tooltipData && (
+        <div
+          className="fixed z-50 pointer-events-none"
+          style={{
+            left: `${tooltipData.x + 15}px`,
+            top: `${tooltipData.y + 15}px`,
+          }}
+        >
+          <div className="bg-slate-900/95 backdrop-blur-sm border border-cyan-400/50 rounded-lg shadow-xl shadow-cyan-900/30 px-4 py-3 min-w-[200px]">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <div 
+                  className="w-4 h-4 rounded border border-slate-700" 
+                  style={{ backgroundColor: tooltipData.pixel.color || '#dc2626' }}
+                />
+                <span className="text-white font-semibold text-sm">
+                  {tooltipData.pixel.company || 'Reserved Pixel'}
+                </span>
+              </div>
+              <div className="text-xs text-gray-400">
+                Position: ({tooltipData.pixel.x * 10}, {tooltipData.pixel.y * 10})
+              </div>
+              <div className="text-xs text-gray-400">
+                Size: 10×10 pixels
+              </div>
+              {tooltipData.pixel.link && (
+                <div className="text-xs text-cyan-400 truncate">
+                  {tooltipData.pixel.link}
+                </div>
+              )}
+              <div className="pt-1 border-t border-slate-700/50">
+                <span className={`text-xs font-medium ${
+                  tooltipData.pixel.state === 'taken' ? 'text-green-400' : 'text-blue-400'
+                }`}>
+                  {tooltipData.pixel.state === 'taken' ? '● Sold' : '● Reserved'}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {selectedPixel && (
         <PurchaseModal pixel={selectedPixel} onPurchase={handlePurchase} onClose={() => setSelectedPixel(null)} />

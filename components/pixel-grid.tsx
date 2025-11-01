@@ -137,36 +137,38 @@ export function PixelGrid() {
   )
 
   const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current)
-    }
-
-    animationFrameRef.current = requestAnimationFrame(() => {
-      const canvas = e.currentTarget
-      const rect = canvas.getBoundingClientRect()
-      const scaleX = (GRID_SIZE * BLOCK_SIZE) / rect.width
-      const scaleY = (GRID_SIZE * BLOCK_SIZE) / rect.height
-      const x = Math.floor(((e.clientX - rect.left) * scaleX) / BLOCK_SIZE)
-      const y = Math.floor(((e.clientY - rect.top) * scaleY) / BLOCK_SIZE)
-      const pixelId = `${x}-${y}`
-      const pixel = pixels[pixelId]
-      
-      if (pixelId !== hoveredPixel && pixel) {
-        setHoveredPixel(pixelId)
-        renderCanvas(pixelId)
-        
-        // Show tooltip for taken/reserved pixels
-        if (pixel.state !== "free") {
-          setTooltipData({
-            x: e.clientX,
-            y: e.clientY,
-            pixel: pixel
-          })
-        } else {
-          setTooltipData(null)
-        }
+    const canvas = e.currentTarget
+    const rect = canvas.getBoundingClientRect()
+    const scaleX = (GRID_SIZE * BLOCK_SIZE) / rect.width
+    const scaleY = (GRID_SIZE * BLOCK_SIZE) / rect.height
+    const x = Math.floor(((e.clientX - rect.left) * scaleX) / BLOCK_SIZE)
+    const y = Math.floor(((e.clientY - rect.top) * scaleY) / BLOCK_SIZE)
+    const pixelId = `${x}-${y}`
+    const pixel = pixels[pixelId]
+    
+    // ALWAYS update tooltip position if hovering over sold/reserved pixel
+    if (pixel) {
+      if (pixel.state !== "free") {
+        setTooltipData({
+          x: e.clientX,
+          y: e.clientY,
+          pixel: pixel
+        })
+      } else {
+        setTooltipData(null)
       }
-    })
+      
+      // Only re-render canvas if pixel changed
+      if (pixelId !== hoveredPixel) {
+        setHoveredPixel(pixelId)
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current)
+        }
+        animationFrameRef.current = requestAnimationFrame(() => {
+          renderCanvas(pixelId)
+        })
+      }
+    }
   }, [hoveredPixel, pixels, renderCanvas])
 
   return (

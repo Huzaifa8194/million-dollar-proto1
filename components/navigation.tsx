@@ -39,7 +39,10 @@ export function Navigation() {
           <Link href="#contact" className="text-sm text-gray-400 hover:text-cyan-400 transition-colors">
             Contact Me
           </Link>
-          <Button className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-black font-semibold shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50 transition-all">
+          <Button 
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-black font-semibold shadow-lg shadow-cyan-500/30 hover:shadow-cyan-500/50 transition-all"
+          >
             Buy Pixels
           </Button>
         </div>
@@ -94,7 +97,10 @@ export function Navigation() {
             </Link>
             <Button
               className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-400 hover:to-blue-400 text-black font-semibold shadow-lg shadow-cyan-500/30"
-              onClick={() => setMobileMenuOpen(false)}
+              onClick={() => {
+                setMobileMenuOpen(false)
+                window.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
             >
               Buy Pixels
             </Button>

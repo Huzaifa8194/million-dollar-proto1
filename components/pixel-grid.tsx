@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useRef, useEffect } from "react"
+import { useState, useCallback, useRef, useEffect, useMemo } from "react"
 import { PurchaseModal } from "./purchase-modal"
 
 interface Pixel {
@@ -13,7 +13,8 @@ interface Pixel {
   color?: string
 }
 
-const GRID_SIZE = 1000 // Full 1000x1000 grid
+const GRID_SIZE = 100 // Back to 100x100 for performance (represents 1000x1000 conceptually)
+const BLOCK_SIZE = 10 // Each block represents 10x10 pixels
 
 export function PixelGrid() {
   const [pixels, setPixels] = useState<Record<string, Pixel>>(() => {
@@ -41,8 +42,9 @@ export function PixelGrid() {
   const [selectedPixel, setSelectedPixel] = useState<Pixel | null>(null)
   const [hoveredPixel, setHoveredPixel] = useState<string | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const animationFrameRef = useRef<number>()
 
-  // Render canvas
+  // Render canvas efficiently
   const renderCanvas = useCallback((highlightPixelId?: string | null) => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -50,19 +52,29 @@ export function PixelGrid() {
     const ctx = canvas.getContext("2d", { alpha: false })
     if (!ctx) return
 
+    // Clear and render
+    ctx.clearRect(0, 0, GRID_SIZE * BLOCK_SIZE, GRID_SIZE * BLOCK_SIZE)
+    
     for (let i = 0; i < GRID_SIZE; i++) {
       for (let j = 0; j < GRID_SIZE; j++) {
         const id = `${i}-${j}`
         const pixel = pixels[id]
         if (pixel) {
           if (pixel.state === "free") {
-            ctx.fillStyle = id === highlightPixelId ? "#00d4ff" : "#374151" // grey, cyan on hover
+            ctx.fillStyle = id === highlightPixelId ? "#00d4ff" : "#4B5563" // grey, cyan on hover
           } else if (pixel.state === "reserved") {
             ctx.fillStyle = "#6366f1" // indigo
           } else {
             ctx.fillStyle = pixel.color || "#dc2626" // color or red
           }
-          ctx.fillRect(i, j, 1, 1)
+          ctx.fillRect(i * BLOCK_SIZE, j * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
+          
+          // Add border for clarity
+          if (pixel.state === "free") {
+            ctx.strokeStyle = "#1F2937"
+            ctx.lineWidth = 1
+            ctx.strokeRect(i * BLOCK_SIZE, j * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE)
+          }
         }
       }
     }
@@ -84,8 +96,9 @@ export function PixelGrid() {
       if (!selectedPixel) return
 
       const updatedPixels = { ...pixels }
-      for (let i = 0; i < blockSize; i++) {
-        for (let j = 0; j < blockSize; j++) {
+      const blocksToUpdate = blockSize / 10 // Convert to grid blocks
+      for (let i = 0; i < blocksToUpdate; i++) {
+        for (let j = 0; j < blocksToUpdate; j++) {
           const pixelId = `${selectedPixel.x + i}-${selectedPixel.y + j}`
           if (pixelId in updatedPixels) {
             updatedPixels[pixelId].state = "reserved"
@@ -98,8 +111,36 @@ export function PixelGrid() {
     [selectedPixel, pixels],
   )
 
-  const freePixelCount = Object.values(pixels).filter((p) => p.state === "free").length
-  const takenPixelCount = Object.values(pixels).filter((p) => p.state === "taken" || p.state === "reserved").length
+  const freePixelCount = useMemo(() => 
+    Object.values(pixels).filter((p) => p.state === "free").length * 100, // Each block = 100 pixels
+    [pixels]
+  )
+  
+  const takenPixelCount = useMemo(() => 
+    Object.values(pixels).filter((p) => p.state === "taken" || p.state === "reserved").length * 100,
+    [pixels]
+  )
+
+  const handleMouseMove = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+    }
+
+    animationFrameRef.current = requestAnimationFrame(() => {
+      const canvas = e.currentTarget
+      const rect = canvas.getBoundingClientRect()
+      const scaleX = (GRID_SIZE * BLOCK_SIZE) / rect.width
+      const scaleY = (GRID_SIZE * BLOCK_SIZE) / rect.height
+      const x = Math.floor(((e.clientX - rect.left) * scaleX) / BLOCK_SIZE)
+      const y = Math.floor(((e.clientY - rect.top) * scaleY) / BLOCK_SIZE)
+      const pixelId = `${x}-${y}`
+      
+      if (pixelId !== hoveredPixel && pixels[pixelId]) {
+        setHoveredPixel(pixelId)
+        renderCanvas(pixelId)
+      }
+    })
+  }, [hoveredPixel, pixels, renderCanvas])
 
   return (
     <div className="w-full max-w-[1020px] mx-auto space-y-4">
@@ -118,15 +159,15 @@ export function PixelGrid() {
         </span>
       </div>
 
-      {/* THE GRID - Fully visible 1000x1000 */}
+      {/* THE GRID - Fully visible 100x100 blocks (1000x1000 pixels) */}
       <div className="bg-slate-950 border-2 border-cyan-500/30 rounded-lg shadow-2xl shadow-cyan-900/20 overflow-hidden w-full">
         <canvas
           ref={canvasRef}
-          width={GRID_SIZE}
-          height={GRID_SIZE}
-          className="w-full h-auto cursor-crosshair"
+          width={GRID_SIZE * BLOCK_SIZE}
+          height={GRID_SIZE * BLOCK_SIZE}
+          className="w-full h-auto cursor-pointer hover:cursor-crosshair"
           style={{
-            imageRendering: "pixelated",
+            imageRendering: "auto",
             maxWidth: "100%",
             height: "auto",
             aspectRatio: "1/1",
@@ -134,32 +175,23 @@ export function PixelGrid() {
           onClick={(e) => {
             const canvas = e.currentTarget
             const rect = canvas.getBoundingClientRect()
-            const scaleX = GRID_SIZE / rect.width
-            const scaleY = GRID_SIZE / rect.height
-            const x = Math.floor((e.clientX - rect.left) * scaleX)
-            const y = Math.floor((e.clientY - rect.top) * scaleY)
+            const scaleX = (GRID_SIZE * BLOCK_SIZE) / rect.width
+            const scaleY = (GRID_SIZE * BLOCK_SIZE) / rect.height
+            const x = Math.floor(((e.clientX - rect.left) * scaleX) / BLOCK_SIZE)
+            const y = Math.floor(((e.clientY - rect.top) * scaleY) / BLOCK_SIZE)
             const pixelId = `${x}-${y}`
             const pixel = pixels[pixelId]
             if (pixel && pixel.state === "free") {
               handlePixelClick(pixel)
             }
           }}
-          onMouseMove={(e) => {
-            const canvas = e.currentTarget
-            const rect = canvas.getBoundingClientRect()
-            const scaleX = GRID_SIZE / rect.width
-            const scaleY = GRID_SIZE / rect.height
-            const x = Math.floor((e.clientX - rect.left) * scaleX)
-            const y = Math.floor((e.clientY - rect.top) * scaleY)
-            const pixelId = `${x}-${y}`
-            if (pixelId !== hoveredPixel) {
-              setHoveredPixel(pixelId)
-              renderCanvas(pixelId)
-            }
-          }}
+          onMouseMove={handleMouseMove}
           onMouseLeave={() => {
             setHoveredPixel(null)
             renderCanvas()
+            if (animationFrameRef.current) {
+              cancelAnimationFrame(animationFrameRef.current)
+            }
           }}
         />
       </div>
